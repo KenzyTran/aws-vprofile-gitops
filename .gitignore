@@ -17,6 +17,9 @@ workshop/public/
 workshop/resources/_gen/
 .hugo_build.lock
 
+# Tooling scratch
+.playwright-mcp/
+
 # IDE / OS
 .idea/
 .vscode/

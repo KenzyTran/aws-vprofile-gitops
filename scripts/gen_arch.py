@@ -93,8 +93,8 @@ def edge(cid, s, t, label="", pts=None, dashed=0, color="#545B64",
 cells.append('<mxCell id="t1" value="vProfile GitOps CI/CD on AWS EKS" style="text;html=1;'
              'align=left;verticalAlign=top;fontSize=28;fontStyle=1;fontFamily=Helvetica;" '
              'vertex="1" parent="1"><mxGeometry x="40" y="30" width="900" height="40" as="geometry"/></mxCell>')
-cells.append('<mxCell id="t2" value="GitHub Actions builds and scans, ArgoCD syncs the Helm chart '
-             'to an EKS cluster" style="text;html=1;align=left;verticalAlign=top;fontSize=15;'
+cells.append('<mxCell id="t2" value="Two GitHub Actions flows: scan on pull request, build and ship '
+             'on merge - then ArgoCD syncs the Helm chart to EKS" style="text;html=1;align=left;verticalAlign=top;fontSize=15;'
              'fontColor=#5A6B7B;fontFamily=Helvetica;" vertex="1" parent="1">'
              '<mxGeometry x="40" y="72" width="900" height="24" as="geometry"/></mxCell>')
 cells.append('<mxCell id="t3" style="line;strokeWidth=2;html=1;strokeColor=#FF9900;" vertex="1" '
@@ -139,10 +139,10 @@ logo("rabbitmq", 1338, 596, "vpromq01", "RabbitMQ")
 
 # ---- Edges (dedicated lanes, no overlap) ----
 edge("e1", "admin", "github", "git push", entry=(0, 0.5))
-edge("e3", "gha", "ecr", "build & push image", pts=[(740, 212), (976, 212)],
+edge("e3", "gha", "ecr", "build & push image (on merge)", pts=[(740, 212), (976, 212)],
      exit=(0.5, 0), entry=(0.5, 0))
-edge("e2", "gha", "ec2sonar", "scan + quality gate", exit=(1, 0.5), entry=(0, 0.5))
-edge("e4", "gha", "github", "update values.yaml", exit=(0, 0.8), entry=(1, 0.8))
+edge("e2", "gha", "ec2sonar", "scan + quality gate (on PR)", color="#2D72D9", exit=(1, 0.5), entry=(0, 0.5))
+edge("e4", "gha", "github", "update values.yaml (on merge)", exit=(0, 0.8), entry=(1, 0.8))
 edge("e10", "argo", "github", "ArgoCD sync (GitOps)", pts=[(1365, 112), (347, 112)],
      exit=(0.5, 0), entry=(0.5, 0), color="#1A9C37")
 edge("e6", "ecr", "k8s", "pull image", pts=[(1105, 256)], exit=(1, 0.5), entry=(0, 0.5))

@@ -1455,10 +1455,59 @@ ArgoCD đồng bộ Git → EKS. **Git là nguồn chân lý duy nhất** — kh
 
 ## Dọn dẹp (tránh phát sinh chi phí AWS)
 
-Sau khi thực hành xong:
+> **Cảnh báo:** dọn dẹp **sai thứ tự** là nguyên nhân số một gây tốn tiền ngoài ý muốn. Hai ALB, các
+> EBS volume của PVC, NAT Gateway và Elastic IP vẫn bị tính tiền kể cả khi bạn nghĩ đã xoá cluster.
+> Làm **đúng thứ tự** dưới đây rồi chạy **checklist xác minh** ở cuối.
 
-- `terraform destroy` trong `vprofile-infra` để xoá EKS cluster, VPC, node group.
-- Xoá ALB còn sót (nếu Ingress chưa được xoá trước khi destroy), xoá ECR repo nếu không dùng.
-- **Terminate** SonarServer EC2.
-- **Xoá/deactivate** các IAM access key đã tạo (CI user, terraform-admin) và GitHub PAT.
-- Xoá bản ghi DNS (CNAME `vprofile`, `argocd`) nếu không còn dùng.
+Nguyên tắc: dọn dẹp **ngược** với lúc dựng. Phải **giải phóng tài nguyên do Kubernetes tạo (ALB,
+EBS) TRƯỚC `terraform destroy`** — nếu không, AWS Load Balancer Controller bị xoá cùng cluster sẽ
+không kịp dọn ALB, để lại load balancer mồ côi khiến `terraform destroy` thất bại và bạn vẫn bị
+tính tiền.
+
+**Bước 1 — Xoá Ingress + workload (giải phóng ALB và EBS):**
+
+```bash
+kubectl get ingress -A
+kubectl delete ingress vpro-ingress   -n vprofile
+kubectl delete ingress argocd-ingress -n argocd
+kubectl delete ns vprofile            # xoá PVC -> EBS CSI tự xoá EBS volume MySQL
+kubectl get pvc -A                    # phải trống
+```
+
+Chờ **cả 2 ALB biến mất** (EC2 > Load Balancers). Nếu còn, xoá ALB thủ công trong Console — nếu
+không `terraform destroy` sẽ kẹt ở VPC/subnet vì còn ENI của load balancer.
+
+**Bước 2 — Xoá AWS Load Balancer Controller (IAM service account):**
+
+```bash
+eksctl delete iamserviceaccount \
+  --cluster vprofile-eks-cluster --namespace kube-system \
+  --name aws-load-balancer-controller
+```
+
+**Bước 3 — `terraform destroy`** (xoá EKS, VPC, node group, NAT Gateway, EIP):
+
+```bash
+cd vprofile-infra && terraform init && terraform destroy
+```
+
+**Bước 4 — SonarQube EC2:** khuyến nghị **Stop** (giữ lại để tái dùng, IP đổi thì cập nhật
+`SONAR_HOST_URL`). Nếu chắc chắn bỏ: **Terminate** `SonarServer` + xoá SG `sonar-sg`.
+
+**Bước 5 — phần còn lại:** xoá/deactivate IAM access key (`github-actions`, `terraform-admin`), thu
+hồi **GitHub PAT**, xoá **ECR repo** nếu không dùng, xoá CNAME `vprofile`/`argocd`. IAM policy
+`AWSLoadBalancerControllerIAMPolicy` giữ lại cũng được (không tốn tiền).
+
+**Checklist xác minh (đúng region) — không còn tài nguyên tính tiền:**
+
+| Dịch vụ | Cần kiểm tra |
+|---------|--------------|
+| EC2 > Load Balancers | 2 ALB đã biến mất |
+| EC2 > Volumes (EBS)  | không còn volume `available`/mồ côi |
+| EC2 > Elastic IPs    | không còn EIP rảnh (không gắn) |
+| VPC > NAT Gateways   | đã xoá hết (đắt nhất) |
+| EKS > Clusters       | `vprofile-eks-cluster` đã biến mất |
+| CloudFormation       | stack `eksctl-*` đã xoá |
+
+> Hai thứ hay quên và tốn tiền âm thầm nhất: **NAT Gateway** và **EBS volume mồ côi** do PVC chưa xoá
+> trước khi destroy cluster. Luôn kiểm tra hai mục này lần cuối.

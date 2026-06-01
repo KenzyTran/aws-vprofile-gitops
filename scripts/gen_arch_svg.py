@@ -18,11 +18,13 @@ add(f'<rect width="{W}" height="{H}" fill="#ffffff"/>')
 add('<defs><marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">'
     '<path d="M0,0 L7,3 L0,6 Z" fill="#5A6B7B"/></marker>'
     '<marker id="arrg" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">'
-    '<path d="M0,0 L7,3 L0,6 Z" fill="#1A9C37"/></marker></defs>')
+    '<path d="M0,0 L7,3 L0,6 Z" fill="#1A9C37"/></marker>'
+    '<marker id="arrb" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">'
+    '<path d="M0,0 L7,3 L0,6 Z" fill="#2D72D9"/></marker></defs>')
 
 # Title
 add(f'<text x="40" y="46" font-size="28" font-weight="bold" fill="#1A2330">vProfile GitOps CI/CD on AWS EKS</text>')
-add(f'<text x="42" y="72" font-size="15" fill="#5A6B7B">GitHub Actions builds and scans, ArgoCD syncs the Helm chart to an EKS cluster</text>')
+add(f'<text x="42" y="72" font-size="15" fill="#5A6B7B">Two GitHub Actions flows: scan on pull request, build and ship on merge - then ArgoCD syncs the Helm chart to EKS</text>')
 add(f'<line x1="42" y1="88" x2="{W-40}" y2="88" stroke="#FF9900" stroke-width="2"/>')
 
 def zone(x, y, w, h, label, color, dash=False, fill="#ffffff"):
@@ -73,8 +75,8 @@ ciL, ciR = 345, 515
 tile(ciL, 210, "github", "GitHub", "app/helm/infra")
 tile(ciR, 210, "githubactions", "GitHub Actions", "pipeline")
 tile(ciL, 360, "docker", "Docker", "build image")
-tile(ciR, 360, "helm", "Helm", "chart")
-tile(ciL, 500, "sonarqube", "SonarQube", "scan (EC2)")
+tile(ciR, 360, "sonarqube", "SonarQube", "scan (EC2)")
+tile(ciL, 500, "helm", "Helm", "chart")
 tile(ciR, 500, "slack", "Slack", "notify")
 
 # ---- Terraform (provisioner) ----
@@ -98,15 +100,27 @@ tile(c1, 560, "memcached", "vprocache01", "Memcached")
 tile(c2, 560, "rabbitmq", "vpromq01", "RabbitMQ")
 
 # ---- Arrows (clean lanes) ----
-arrow([(132, 300), (200, 300), (200, 234), (321, 234)], "git push", lx=216, ly=292)
+arrow([(132, 300), (200, 300), (200, 234), (321, 234)], "git push / open PR", lx=222, ly=292)
+# Flow 1 (blue) - on pull request: GitHub Actions -> SonarQube scan + quality gate
+arrow([(539, 250), (562, 250), (562, 384), (539, 384)], "scan + quality gate",
+      color="#2D72D9", mk="arrb", lx=515, ly=318)
+# Flow 2 (gray) - on merge to main: build image -> ECR, then bump Helm values.yaml
 arrow([(540, 222), (940, 222)], "build & push image", lx=735, ly=214)             # gha -> ecr
-arrow([(489, 234), (373, 234)], "update values.yaml", lx=431, ly=200)             # gha -> github
+arrow([(489, 234), (373, 234)], "update values.yaml", lx=431, ly=222)             # gha -> github
 arrow([(974, 224), (1040, 224), (1040, 250), (1116, 250)], "pull image", lx=1040, ly=212) # ecr -> k8s
 arrow([(800, 332), (1035, 332), (1035, 410), (1072, 410)], "provision", color="#7B42BC", dash=True, lx=1035, ly=372) # terraform -> eks
 arrow([(1300, 226), (1300, 110), (345, 110), (345, 186)], "ArgoCD sync (GitOps)", color="#1A9C37", mk="arrg", lx=820, ly=102) # argo -> github
 arrow([(963, 410), (963, 520)], "TLS", color="#DD344C", dash=True, lx=980, ly=468) # acm -> alb
 arrow([(974, 544), (1045, 544), (1045, 434), (1116, 434)], "route", lx=1045, ly=500) # alb -> vproapp
 arrow([(95, 620), (95, 700), (905, 700), (905, 545), (944, 545)], "HTTPS", lx=480, ly=692) # user -> alb
+
+# ---- Legend: the two GitHub Actions flows ----
+def legend(y, color, text):
+    add(f'<rect x="266" y="{y}" width="13" height="13" rx="2" fill="{color}"/>')
+    add(f'<text x="288" y="{y+11}" font-size="11.5" fill="#33414F">{html.escape(text)}</text>')
+
+legend(632, "#2D72D9", "On pull request: build, test, SonarQube scan + quality gate (fail blocks merge)")
+legend(654, "#5A6B7B", "On merge to main: Docker build, push to ECR, then update Helm values.yaml")
 
 add('</svg>')
 OUT.write_text("\n".join(s), encoding="utf-8")
