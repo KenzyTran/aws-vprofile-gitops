@@ -1,6 +1,7 @@
 baseURL = "https://KenzyTran.github.io/aws-vprofile-gitops/"
 title = "vProfile GitOps Workshop"
 theme = "hugo-theme-learn"
+canonifyURLs = true
 
 defaultContentLanguage = "vi"
 defaultContentLanguageInSubdir = true
