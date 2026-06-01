@@ -1,0 +1,147 @@
+name: vProfile CI/CD
+
+on:
+  push:
+    branches: [main]          # docker + helm jobs only
+  pull_request:
+    branches: [main]          # sonar job only
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # PR to main: build, test, checkstyle, SonarQube scan + quality gate.
+  # Quality gate failure blocks the merge (job fails -> required check fails).
+  # ---------------------------------------------------------------------------
+  build-and-sonar:
+    name: Build & SonarQube
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history gives SonarQube accurate new-code/blame analysis.
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven          # caches ~/.m2 keyed on pom.xml
+
+      - name: Cache SonarQube scanner
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: Build and run unit tests
+        run: mvn -B clean verify
+
+      - name: Run Checkstyle
+        run: mvn -B checkstyle:checkstyle
+
+      - name: SonarQube scan
+        uses: sonarsource/sonarqube-scan-action@v2
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+
+      - name: SonarQube quality gate
+        uses: sonarsource/sonarqube-quality-gate-action@v1.1.0
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+
+  # ---------------------------------------------------------------------------
+  # Merge to main: build the Docker image and push to ECR (SHA + latest).
+  # ---------------------------------------------------------------------------
+  docker-build-push:
+    name: Docker build & push to ECR
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.vars.outputs.image_tag }}
+      ecr_registry: ${{ steps.login-ecr.outputs.registry }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tag
+        id: vars
+        run: echo "image_tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ steps.vars.outputs.image_tag }}
+        run: |
+          docker build \
+            -f Docker-files/app/multistage/Dockerfile \
+            -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
+            -t "$ECR_REGISTRY/$ECR_REPOSITORY:latest" \
+            .
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+
+  # ---------------------------------------------------------------------------
+  # Merge to main: point the Helm chart at the new image via yq, in the
+  # separate GitOps Helm repo.
+  # ---------------------------------------------------------------------------
+  update-helm:
+    name: Update Helm values
+    if: github.event_name == 'push'
+    needs: docker-build-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Helm repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/${{ vars.HELM_REPO_NAME }}
+          token: ${{ secrets.GITOPS_PAT }}
+          path: helm-repo
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Update image and tag
+        env:
+          ECR_REGISTRY: ${{ needs.docker-build-push.outputs.ecr_registry }}
+          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ needs.docker-build-push.outputs.image_tag }}
+        run: |
+          yq -i \
+            ".app.image = \"$ECR_REGISTRY/$ECR_REPOSITORY\" | .app.tag = \"$IMAGE_TAG\"" \
+            helm-repo/helm/vprofile/values.yaml
+
+      - name: Commit and push
+        env:
+          IMAGE_TAG: ${{ needs.docker-build-push.outputs.image_tag }}
+        run: |
+          cd helm-repo
+          git config user.name "${{ secrets.HELM_REPO_USER }}"
+          git config user.email "${{ secrets.HELM_REPO_USER }}@users.noreply.github.com"
+          git add helm/vprofile/values.yaml
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "ci: update vprofile image to $IMAGE_TAG"
+            git push
+          fi

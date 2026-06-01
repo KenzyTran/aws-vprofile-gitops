@@ -1,0 +1,43 @@
+app:
+  image: 851725411875.dkr.ecr.us-east-1.amazonaws.com/vprofileappimg
+  tag: 7d064a3cc586d197b2968f5bb085e8d2d617942d
+  replicas: 1
+  containerPort: 8080
+  servicePort: 8080
+db:
+  image: vprocontainers/vprofiledb
+  tag: latest
+  replicas: 1
+  containerPort: 3306
+  servicePort: 3306
+  storageClass: gp2
+  storageSize: 3Gi
+memcached:
+  image: memcached
+  tag: latest
+  replicas: 1
+  containerPort: 11211
+  servicePort: 11211
+rabbitmq:
+  image: rabbitmq
+  tag: latest
+  replicas: 1
+  containerPort: 5672
+  servicePort: 5672
+  defaultUser: guest
+initcontainers:
+  image: busybox
+  tag: latest
+ingress:
+  enabled: true
+  host: vprofile.kenzytran.click
+  servicePort: 8080
+secrets:
+  dbPass: dnByb2RicGFzcw==
+  rmqPass: Z3Vlc3Q=
+dockerregistry:
+  enabled: false
+  server: ""
+  username: ""
+  password: ""
+  email: ""
