@@ -3,7 +3,7 @@
 Workshop hướng dẫn triển khai ứng dụng multi-tier **vProfile** lên **AWS EKS** theo mô hình
 **GitOps**: CI bằng **GitHub Actions** (SonarQube, Docker, ECR) và CD bằng **ArgoCD**.
 
-📖 **Tài liệu thực hành đầy đủ:** [HUONG-DAN-THUC-HANH.md](HUONG-DAN-THUC-HANH.md) — 44 bước, từ dựng
+**Tài liệu thực hành đầy đủ:** [HUONG-DAN-THUC-HANH.md](HUONG-DAN-THUC-HANH.md) - 44 bước, từ dựng
 hạ tầng tới chạy pipeline CI/CD qua Pull Request.
 
 ## Cấu trúc repo
