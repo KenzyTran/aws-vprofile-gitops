@@ -1455,9 +1455,9 @@ ArgoCD đồng bộ Git → EKS. **Git là nguồn chân lý duy nhất** — kh
 
 ## Dọn dẹp (tránh phát sinh chi phí AWS)
 
-> **Cảnh báo:** dọn dẹp **sai thứ tự** là nguyên nhân số một gây tốn tiền ngoài ý muốn. Hai ALB, các
-> EBS volume của PVC, NAT Gateway và Elastic IP vẫn bị tính tiền kể cả khi bạn nghĩ đã xoá cluster.
-> Làm **đúng thứ tự** dưới đây rồi chạy **checklist xác minh** ở cuối.
+> **Cảnh báo:** dọn dẹp **sai thứ tự** là nguyên nhân số một gây tốn tiền ngoài ý muốn. Hai ALB và
+> các EBS volume của PVC vẫn bị tính tiền kể cả khi bạn nghĩ đã xoá cluster. Làm **đúng thứ tự** dưới
+> đây rồi chạy **checklist xác minh** ở cuối.
 
 Nguyên tắc: dọn dẹp **ngược** với lúc dựng. Phải **giải phóng tài nguyên do Kubernetes tạo (ALB,
 EBS) TRƯỚC `terraform destroy`** — nếu không, AWS Load Balancer Controller bị xoá cùng cluster sẽ
@@ -1485,7 +1485,7 @@ eksctl delete iamserviceaccount \
   --name aws-load-balancer-controller
 ```
 
-**Bước 3 — `terraform destroy`** (xoá EKS, VPC, node group, NAT Gateway, EIP):
+**Bước 3 — `terraform destroy`** (xoá EKS, VPC public subnet, node group, Internet Gateway — hạ tầng này không dùng NAT Gateway/EIP):
 
 ```bash
 cd vprofile-infra && terraform init && terraform destroy
@@ -1504,10 +1504,9 @@ hồi **GitHub PAT**, xoá **ECR repo** nếu không dùng, xoá CNAME `vprofile
 |---------|--------------|
 | EC2 > Load Balancers | 2 ALB đã biến mất |
 | EC2 > Volumes (EBS)  | không còn volume `available`/mồ côi |
-| EC2 > Elastic IPs    | không còn EIP rảnh (không gắn) |
-| VPC > NAT Gateways   | đã xoá hết (đắt nhất) |
+| EC2 > Instances      | worker node đã xoá; SonarServer Stopped/Terminated |
 | EKS > Clusters       | `vprofile-eks-cluster` đã biến mất |
 | CloudFormation       | stack `eksctl-*` đã xoá |
 
-> Hai thứ hay quên và tốn tiền âm thầm nhất: **NAT Gateway** và **EBS volume mồ côi** do PVC chưa xoá
-> trước khi destroy cluster. Luôn kiểm tra hai mục này lần cuối.
+> Hai thứ hay quên và tốn tiền âm thầm nhất: **ALB còn sót** (do xoá Ingress không thành công) và
+> **EBS volume mồ côi** do PVC chưa xoá trước khi destroy cluster. Luôn kiểm tra hai mục này lần cuối.

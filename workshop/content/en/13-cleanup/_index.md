@@ -11,9 +11,9 @@ pre: "<b>13. </b>"
 # Clean up resources (avoid AWS charges)
 
 {{% notice warning %}}
-Cleaning up in the **wrong order** is the number-one cause of surprise bills. The two ALBs, the PVC
-EBS volumes, NAT Gateways and Elastic IPs keep costing money even when you think the cluster is
-gone. Follow the **exact order below** and run the **verification checklist** at the end.
+Cleaning up in the **wrong order** is the number-one cause of surprise bills. The two ALBs and the
+PVC EBS volumes keep costing money even when you think the cluster is gone. Follow the **exact order
+below** and run the **verification checklist** at the end.
 {{% /notice %}}
 
 Principle: clean up in **reverse order** of how you built it. The key point is to **release the
@@ -97,8 +97,9 @@ terraform init      # optional, run it to be safe if you changed code
 terraform destroy
 ```
 
-This deletes the EKS control plane, node group (EC2 workers), VPC, subnets, route tables, **NAT
-Gateways** and **Elastic IPs** (if defined). Wait for it to finish and confirm `Destroy complete!`.
+This deletes the EKS control plane, node group (EC2 workers), VPC, public subnets, route tables and
+the Internet Gateway. (This setup uses **public subnets, with no NAT Gateway/Elastic IP**, so those
+two are nothing to worry about.) Wait for it to finish and confirm `Destroy complete!`.
 
 {{% notice tip %}}
 Want to rebuild for practice? You **don't need to start from scratch**: just `terraform apply`, then
@@ -143,15 +144,14 @@ Go through each item in the AWS Console (in the region you used):
 |---------|-------|-----------------------|
 | EC2 > Load Balancers | both ALBs gone | ALB billed hourly |
 | EC2 > Volumes (EBS)  | no `available`/orphaned volume (the PVC's gp2) | EBS billed per GB |
-| EC2 > Elastic IPs    | no *unattached* EIP | idle EIP is billed |
 | EC2 > Instances      | workers deleted; SonarServer Stopped/Terminated | compute |
-| VPC > NAT Gateways   | all deleted | NAT is the priciest, hourly + data |
 | EKS > Clusters       | `vprofile-eks-cluster` gone | control plane hourly |
 | CloudFormation       | `eksctl-*` stacks deleted | (drags resources along) |
 | ECR                  | repo deleted if unused | image storage |
 | IAM                  | access keys/PAT revoked | security risk |
 
 {{% notice warning %}}
-The two most-forgotten money sinks: **NAT Gateways** and **orphaned EBS volumes** from a PVC that
-wasn't deleted before destroying the cluster. Always double-check these two last.
+The two most-forgotten money sinks: **leftover ALBs** (from an Ingress that failed to delete) and
+**orphaned EBS volumes** from a PVC that wasn't deleted before destroying the cluster. Always
+double-check these two last.
 {{% /notice %}}

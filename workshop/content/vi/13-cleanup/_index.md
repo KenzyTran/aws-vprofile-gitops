@@ -11,9 +11,9 @@ pre: "<b>13. </b>"
 # Dọn dẹp tài nguyên (tránh phát sinh chi phí AWS)
 
 {{% notice warning %}}
-Dọn dẹp **sai thứ tự** là nguyên nhân số một gây tốn tiền ngoài ý muốn. Hai ALB, các EBS volume
-của PVC, NAT Gateway và Elastic IP vẫn bị tính tiền kể cả khi bạn nghĩ đã xoá cluster. Làm **đúng
-thứ tự dưới đây** và chạy **checklist xác minh** ở cuối.
+Dọn dẹp **sai thứ tự** là nguyên nhân số một gây tốn tiền ngoài ý muốn. Hai ALB và các EBS volume
+của PVC vẫn bị tính tiền kể cả khi bạn nghĩ đã xoá cluster. Làm **đúng thứ tự dưới đây** và chạy
+**checklist xác minh** ở cuối.
 {{% /notice %}}
 
 Nguyên tắc: dọn dẹp theo **thứ tự ngược** với lúc dựng. Quan trọng nhất là **giải phóng các tài
@@ -93,8 +93,9 @@ terraform init      # không bắt buộc, chạy cho chắc nếu đã sửa co
 terraform destroy
 ```
 
-Lệnh này xoá EKS control plane, node group (EC2 worker), VPC, subnet, route table, **NAT Gateway**
-và **Elastic IP** (nếu có trong cấu hình). Đợi chạy xong và xác nhận `Destroy complete!`.
+Lệnh này xoá EKS control plane, node group (EC2 worker), VPC, public subnet, route table và
+Internet Gateway. (Hạ tầng này dùng **public subnet, không có NAT Gateway/Elastic IP** nên không
+phải lo hai khoản đó.) Đợi chạy xong và xác nhận `Destroy complete!`.
 
 {{% notice tip %}}
 Muốn dựng lại để luyện tập? Bạn **không cần làm lại từ đầu**: chỉ cần `terraform apply`, rồi đi tiếp
@@ -139,15 +140,13 @@ tiền compute.
 |---------|--------------|---------------------|
 | EC2 > Load Balancers | 2 ALB đã biến mất | ALB tính tiền theo giờ |
 | EC2 > Volumes (EBS)  | Không còn volume `available`/mồ côi (gp2 của PVC) | EBS tính tiền theo GB |
-| EC2 > Elastic IPs    | Không còn EIP nào *không gắn* | EIP rảnh bị tính tiền |
 | EC2 > Instances      | Worker node đã xoá; SonarServer Stopped/Terminated | compute |
-| VPC > NAT Gateways   | Đã xoá hết | NAT đắt nhất, tính theo giờ + data |
 | EKS > Clusters       | `vprofile-eks-cluster` đã biến mất | control plane theo giờ |
 | CloudFormation       | Stack `eksctl-*` đã xoá | (kéo theo tài nguyên) |
 | ECR                  | Repo đã xoá nếu không dùng | lưu trữ image |
 | IAM                  | Access keys/PAT đã thu hồi | rủi ro bảo mật |
 
 {{% notice warning %}}
-Hai thứ hay bị quên nhất và tốn tiền âm thầm: **NAT Gateway** và **EBS volume mồ côi** do PVC chưa
-xoá trước khi destroy cluster. Luôn kiểm tra hai mục này lần cuối.
+Hai thứ hay bị quên nhất và tốn tiền âm thầm: **ALB còn sót** (do xoá Ingress không thành công) và
+**EBS volume mồ côi** do PVC chưa xoá trước khi destroy cluster. Luôn kiểm tra hai mục này lần cuối.
 {{% /notice %}}
